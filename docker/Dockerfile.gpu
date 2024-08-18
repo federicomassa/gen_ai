@@ -1,0 +1,36 @@
+FROM tensorflow/tensorflow:2.10.1-gpu
+
+RUN rm /etc/apt/sources.list.d/cuda.list
+RUN apt-get update
+
+RUN apt-get install -y apt-transport-https curl gnupg
+RUN curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor >bazel-archive-keyring.gpg
+RUN mv bazel-archive-keyring.gpg /usr/share/keyrings
+RUN echo "deb [arch=amd64 signed-by=/usr/share/keyrings/bazel-archive-keyring.gpg] https://storage.googleapis.com/bazel-apt stable jdk1.8" | tee /etc/apt/sources.list.d/bazel.list
+
+RUN apt-get update
+
+RUN apt-get install -y bazel python3-pyqt5
+
+RUN apt-get install -y unzip graphviz curl musescore3
+RUN apt-get install -y 
+
+RUN pip install --upgrade pip
+
+WORKDIR /app
+
+COPY ./requirements.txt /app
+RUN pip install -r /app/requirements.txt
+
+# Hack to get around tensorflow-io issue - https://github.com/tensorflow/io/issues/1755
+RUN pip install tensorflow-io
+RUN pip uninstall -y tensorflow-io
+
+RUN apt-get install -y x11-apps xauth
+
+COPY /MODULE.bazel /app/
+COPY /gen_ai/. /app/gen_ai
+COPY /notebooks/. /app/notebooks
+COPY /scripts/. /app/scripts
+
+ENV PYTHONPATH="${PYTHONPATH}:/app"

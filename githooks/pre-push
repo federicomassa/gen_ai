@@ -1,0 +1,62 @@
+#!/bin/bash
+# Pre-push hook to check Black formatting on the pushed code
+
+# Get the name of the current branch
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Find the remote tracking branch if it exists
+REMOTE_TRACKING_BRANCH=$(git for-each-ref --format '%(upstream:short)' "refs/heads/$BRANCH")
+
+# If there is no remote tracking branch, use the default remote (origin) and the current branch
+if [ -z "$REMOTE_TRACKING_BRANCH" ]; then
+    REMOTE="origin"
+    REMOTE_TRACKING_BRANCH="$REMOTE/$BRANCH"
+fi
+
+# Get the commit hashes
+LOCAL=$(git rev-parse HEAD)
+BASE=$(git merge-base HEAD "refs/remotes/$REMOTE_TRACKING_BRANCH")
+
+# Find the files that have been modified in the range
+FILES=$(git diff --name-only "$BASE" "$LOCAL" -- '*.py')
+
+# Function for pretty printing
+run_task() {
+    description=$1
+    run_condition=$2
+    command=$3
+    user_hint=$4
+    success_msg=" --> \033[0;32mDONE!\033[0m\n"
+    failure_msg=" --> \033[0;31mFAILED!\033[0m\n"
+
+    printf "[ %-30s ]" "$description"
+    if eval "$run_condition"; then
+      OUTPUT=$(eval "$command" 2>&1)
+      STATUS=$?
+    else
+      STATUS=0
+    fi
+
+    if [ $STATUS -eq 0 ]; then
+      printf "$success_msg"
+    else
+      printf "$failure_msg"
+      echo $OUTPUT
+      echo $user_hint
+    fi
+
+    return $STATUS
+}
+
+git worktree add -f .tmp $LOCAL
+cd .tmp
+# Run Black in check mode on the specific files
+run_task "Running black" "[ -n \"$FILES\" ]" "black --check $FILES" "Please format your code with black and try again."
+
+RESULT=$?
+cd ..
+
+git worktree remove -f .tmp
+
+# Allow push if Black formatting is correct
+exit $RESULT
